@@ -1,0 +1,6 @@
+{
+  "name": "Amusic",
+  "description": "A premium offline music player with Material 3 styling, advanced sliding drawer menu, local caching, category sorting and custom metadata preferences.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
