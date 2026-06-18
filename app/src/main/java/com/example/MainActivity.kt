@@ -88,21 +88,28 @@ fun MainAppEntry() {
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
+    val permissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
     val reqPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { resultMap ->
+        val storageGranted = resultMap[targetPermission] ?: false
+        if (storageGranted) {
             viewModel.onPermissionGranted()
             Toast.makeText(context, "Storage permissions authorized! Scanning music files.", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Permissions denied. Falling back to public streaming tracks.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Permissions denied.", Toast.LENGTH_LONG).show()
         }
     }
 
     // Auto trigger permission request on first start
     LaunchedEffect(Unit) {
         if (!hasPermission) {
-            reqPermissionLauncher.launch(targetPermission)
+            reqPermissionLauncher.launch(permissionsList)
         }
     }
 
@@ -317,7 +324,7 @@ fun MainAppEntry() {
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Button(
-                                        onClick = { reqPermissionLauncher.launch(targetPermission) },
+                                        onClick = { reqPermissionLauncher.launch(permissionsList) },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                     ) {

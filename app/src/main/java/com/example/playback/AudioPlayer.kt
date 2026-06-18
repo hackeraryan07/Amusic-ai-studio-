@@ -1,15 +1,17 @@
 package com.example.playback
 
 import android.content.Context
+import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.example.data.database.TrackEntity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class AudioPlayer(private val context: Context) {
+class AudioPlayer private constructor(private val context: Context) {
     private var mediaPlayer: MediaPlayer? = null
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressJob: Job? = null
@@ -26,6 +28,13 @@ class AudioPlayer(private val context: Context) {
     private val _duration = MutableStateFlow(0)
     val duration: StateFlow<Int> = _duration
 
+    private val _playQueue = MutableStateFlow<List<TrackEntity>>(emptyList())
+    val playQueue: StateFlow<List<TrackEntity>> = _playQueue
+
+    fun setPlayQueue(queue: List<TrackEntity>) {
+        _playQueue.value = queue
+    }
+
     fun playTrack(track: TrackEntity) {
         stop()
         _currentTrack.value = track
@@ -34,7 +43,7 @@ class AudioPlayer(private val context: Context) {
         try {
             mediaPlayer = MediaPlayer().apply {
                 if (track.isDemo) {
-                    // For demo tracks, we use public audio streaming endpoints to showcase a fully functional experience
+                    // For demo tracks, we use public audio streaming endpoints
                     setDataSource(track.path)
                 } else {
                     // For local files we assign the exact URI/FilePath
@@ -47,18 +56,23 @@ class AudioPlayer(private val context: Context) {
                     _isPlaying.value = true
                     _duration.value = mp.duration
                     startProgressTracker()
+                    updateServiceState()
                 }
                 
                 setOnCompletionListener {
                     _isPlaying.value = false
                     _currentPosition.value = 0
                     stopProgressTracker()
+                    updateServiceState()
+                    // Auto play next song on completion
+                    playNext()
                 }
                 
                 setOnErrorListener { _, what, extra ->
                     Log.e("AudioPlayer", "MediaPlayer error: what = $what, extra = $extra")
                     _isPlaying.value = false
                     stopProgressTracker()
+                    updateServiceState()
                     false
                 }
                 
@@ -77,6 +91,7 @@ class AudioPlayer(private val context: Context) {
                 it.pause()
                 _isPlaying.value = false
                 stopProgressTracker()
+                updateServiceState()
             }
         }
     }
@@ -87,6 +102,15 @@ class AudioPlayer(private val context: Context) {
                 it.start()
                 _isPlaying.value = true
                 startProgressTracker()
+                updateServiceState()
+            } else {
+                updateServiceState()
+            }
+        } ?: run {
+            val queue = _playQueue.value
+            if (queue.isNotEmpty()) {
+                val track = _currentTrack.value ?: queue.first()
+                playTrack(track)
             }
         }
     }
@@ -109,6 +133,33 @@ class AudioPlayer(private val context: Context) {
         mediaPlayer = null
         _isPlaying.value = false
         _currentPosition.value = 0
+        updateServiceState()
+    }
+
+    fun playNext() {
+        val queue = _playQueue.value
+        val current = _currentTrack.value ?: return
+        if (queue.isEmpty()) return
+
+        val currentIndex = queue.indexOfFirst { it.id == current.id }
+        if (currentIndex != -1 && currentIndex < queue.size - 1) {
+            playTrack(queue[currentIndex + 1])
+        } else if (queue.isNotEmpty()) {
+            playTrack(queue.first()) // wrap around
+        }
+    }
+
+    fun playPrevious() {
+        val queue = _playQueue.value
+        val current = _currentTrack.value ?: return
+        if (queue.isEmpty()) return
+
+        val currentIndex = queue.indexOfFirst { it.id == current.id }
+        if (currentIndex > 0) {
+            playTrack(queue[currentIndex - 1])
+        } else if (queue.isNotEmpty()) {
+            playTrack(queue.last()) // wrap around
+        }
     }
 
     private fun startProgressTracker() {
@@ -137,5 +188,29 @@ class AudioPlayer(private val context: Context) {
     fun release() {
         stop()
         coroutineScope.cancel()
+    }
+
+    private fun updateServiceState() {
+        val serviceIntent = Intent(context, PlaybackService::class.java).apply {
+            action = PlaybackService.ACTION_UPDATE_STATE
+        }
+        try {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } catch (e: Exception) {
+            Log.e("AudioPlayer", "Failed to start/update PlaybackService", e)
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AudioPlayer? = null
+
+        fun getInstance(context: Context): AudioPlayer {
+            return INSTANCE ?: synchronized(this) {
+                val instance = AudioPlayer(context.applicationContext)
+                INSTANCE = instance
+                instance
+            }
+        }
     }
 }

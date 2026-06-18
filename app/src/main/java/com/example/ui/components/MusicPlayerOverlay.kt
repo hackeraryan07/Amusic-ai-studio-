@@ -58,18 +58,7 @@ fun MusicPlayerOverlay(
                             .fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val artUri = if (activeTrack.isDemo) {
-                            when (activeTrack.id) {
-                                "demo_1" -> "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150"
-                                "demo_2" -> "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150"
-                                "demo_3" -> "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=150"
-                                "demo_4" -> "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=150"
-                                "demo_5" -> "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=150"
-                                else -> "content://media/external/audio/albumart/${activeTrack.albumId}"
-                            }
-                        } else {
-                            "content://media/external/audio/albumart/${activeTrack.albumId}"
-                        }
+                        val artUri = java.io.File(activeTrack.path)
                         
                         TrackArt(
                             model = artUri,
@@ -141,18 +130,7 @@ fun MusicPlayerOverlay(
 
     // B. EXPANDED NOW PLAYING SHEET DIALOG
     if (isExpanded) {
-        val artUri = if (activeTrack.isDemo) {
-            when (activeTrack.id) {
-                "demo_1" -> "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500"
-                "demo_2" -> "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500"
-                "demo_3" -> "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500"
-                "demo_4" -> "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=500"
-                "demo_5" -> "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=500"
-                else -> "content://media/external/audio/albumart/${activeTrack.albumId}"
-            }
-        } else {
-            "content://media/external/audio/albumart/${activeTrack.albumId}"
-        }
+        val artUri = java.io.File(activeTrack.path)
 
         ModalBottomSheet(
             onDismissRequest = { isExpanded = false },

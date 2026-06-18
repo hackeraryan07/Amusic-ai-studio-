@@ -27,7 +27,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
     private val database = AppDatabase.getDatabase(context)
     private val repository = TrackRepository(database.trackDao())
-    val audioPlayer = AudioPlayer(context)
+    val audioPlayer = AudioPlayer.getInstance(context)
 
     // Current tracks listed in database
     val allTracks: StateFlow<List<TrackEntity>> = repository.allTracks
@@ -68,19 +68,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _hasPermission = MutableStateFlow(false)
     val hasPermission: StateFlow<Boolean> = _hasPermission
 
-    // Active Playing Playlist queue
-    private val _playQueue = MutableStateFlow<List<TrackEntity>>(emptyList())
-    val playQueue: StateFlow<List<TrackEntity>> = _playQueue
+    // Active Playing Playlist queue linked directly to player singleton
+    val playQueue: StateFlow<List<TrackEntity>> = audioPlayer.playQueue
 
     init {
         checkPermissionState()
         loadPreferences()
-        // If permission is already granted, scan immediately
-        if (_hasPermission.value) {
-            scanForLocalAudio()
-        } else {
-            // Seed base demo tracks so the app runs with gorgeous tracks on startup with or without permissions
-            seedDemoTracks()
+        
+        // Clear all cached/preset/demo items on start to keep the database fully pure and scan local audio if permitted
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAll()
+            if (_hasPermission.value) {
+                scanForLocalAudio()
+            }
         }
     }
 
@@ -147,7 +147,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     MediaStore.Audio.Media.ALBUM_ID,
                     MediaStore.Audio.Media.DATE_MODIFIED
                 )
-                // Filter music type only
                 val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
                 
                 context.contentResolver.query(uri, projection, selection, null, null)?.use { cursor ->
@@ -173,7 +172,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         val file = File(path)
                         val folderName = file.parentFile?.name ?: "Main Storage"
 
-                        // Exclude tracks shorter than 5 seconds (typically notifications)
+                        // Exclude tracks shorter than 5 seconds
                         if (duration > 5000) {
                             localMusic.add(
                                 TrackEntity(
@@ -194,10 +193,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                // Clean existing non-demo cached track records in database
-                repository.clearNonDemoTracks()
-
-                // Insert the discovered files
+                // Discard stale data and insert newly scanned files
+                repository.clearAll()
                 if (localMusic.isNotEmpty()) {
                     repository.insertTracks(localMusic)
                 }
@@ -210,82 +207,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun seedDemoTracks() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val demoList = listOf(
-                TrackEntity(
-                    id = "demo_1",
-                    title = "Horizon Dreamer",
-                    artist = "SoundHelix",
-                    album = "Helix Odyssey",
-                    duration = 372000,
-                    path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-                    albumId = 1001L,
-                    dateModified = 1718000000L,
-                    folderName = "Streaming Demo",
-                    isFavorite = false,
-                    isDemo = true
-                ),
-                TrackEntity(
-                    id = "demo_2",
-                    title = "Retro Wavecrest",
-                    artist = "SoundHelix",
-                    album = "Helix Odyssey",
-                    duration = 423000,
-                    path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-                    albumId = 1001L,
-                    dateModified = 1718010000L,
-                    folderName = "Streaming Demo",
-                    isFavorite = true, // pre-favorite one for the demo experience
-                    isDemo = true
-                ),
-                TrackEntity(
-                    id = "demo_3",
-                    title = "Infinite Echoes",
-                    artist = "SoundHelix",
-                    album = "Ambience World",
-                    duration = 344000,
-                    path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-                    albumId = 1002L,
-                    dateModified = 1718020000L,
-                    folderName = "Streaming Demo",
-                    isFavorite = false,
-                    isDemo = true
-                ),
-                TrackEntity(
-                    id = "demo_4",
-                    title = "Synth Horizon",
-                    artist = "SoundHelix",
-                    album = "Ambience World",
-                    duration = 302000,
-                    path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
-                    albumId = 1002L,
-                    dateModified = 1718030000L,
-                    folderName = "Streaming Demo",
-                    isFavorite = false,
-                    isDemo = true
-                ),
-                TrackEntity(
-                    id = "demo_5",
-                    title = "Digital Oasis",
-                    artist = "SoundHelix",
-                    album = "Synthwave Beats",
-                    duration = 361000,
-                    path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
-                    albumId = 1003L,
-                    dateModified = 1718040000L,
-                    folderName = "Streaming Demo",
-                    isFavorite = false,
-                    isDemo = true
-                )
-            )
-            repository.insertTracks(demoList)
-        }
-    }
-
-    // Play track and configure playlists queue
+    // Play track and configure playlist queue
     fun selectAndPlayTrack(track: TrackEntity, sourceList: List<TrackEntity>) {
-        _playQueue.value = sourceList
+        audioPlayer.setPlayQueue(sourceList)
         audioPlayer.playTrack(track)
     }
 
@@ -296,8 +220,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val current = audioPlayer.currentTrack.value
             if (current != null) {
                 audioPlayer.resume()
-            } else if (_playQueue.value.isNotEmpty()) {
-                audioPlayer.playTrack(_playQueue.value.first())
+            } else if (audioPlayer.playQueue.value.isNotEmpty()) {
+                audioPlayer.playTrack(audioPlayer.playQueue.value.first())
             } else if (allTracks.value.isNotEmpty()) {
                 selectAndPlayTrack(allTracks.value.first(), allTracks.value)
             }
@@ -305,35 +229,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playNext() {
-        val queue = _playQueue.value
-        val current = audioPlayer.currentTrack.value ?: return
-        if (queue.isEmpty()) return
-
-        val currentIndex = queue.indexOfFirst { it.id == current.id }
-        if (currentIndex != -1 && currentIndex < queue.size - 1) {
-            audioPlayer.playTrack(queue[currentIndex + 1])
-        } else if (queue.isNotEmpty()) {
-            audioPlayer.playTrack(queue.first()) // wrap around
-        }
+        audioPlayer.playNext()
     }
 
     fun playPrevious() {
-        val queue = _playQueue.value
-        val current = audioPlayer.currentTrack.value ?: return
-        if (queue.isEmpty()) return
-
-        val currentIndex = queue.indexOfFirst { it.id == current.id }
-        if (currentIndex > 0) {
-            audioPlayer.playTrack(queue[currentIndex - 1])
-        } else if (queue.isNotEmpty()) {
-            audioPlayer.playTrack(queue.last()) // wrap around
-        }
+        audioPlayer.playPrevious()
     }
 
     fun toggleFavorite(trackId: String, isFavorite: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateFavorite(trackId, isFavorite)
-            // also update current track state if it is currently playing
             val current = audioPlayer.currentTrack.value
             if (current != null && current.id == trackId) {
                 audioPlayer.updateCurrentTrackFavorite(isFavorite)
@@ -344,7 +249,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun forceResetDatabase() {
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearAll()
-            seedDemoTracks()
             if (_hasPermission.value) {
                 scanForLocalAudio()
             }
@@ -353,6 +257,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        audioPlayer.release()
+        // Do NOT release audio player on cleared, because playback is managed by our foreground service.
     }
 }

@@ -40,18 +40,7 @@ fun TrackItem(
     ) {
         // 1. Conditional Album Art Render
         if (showAlbumArt) {
-            val artUri = if (track.isDemo) {
-                when (track.id) {
-                    "demo_1" -> "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150"
-                    "demo_2" -> "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150"
-                    "demo_3" -> "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=150"
-                    "demo_4" -> "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=150"
-                    "demo_5" -> "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=150"
-                    else -> "content://media/external/audio/albumart/${track.albumId}"
-                }
-            } else {
-                "content://media/external/audio/albumart/${track.albumId}"
-            }
+            val artUri = java.io.File(track.path)
             TrackArt(
                 model = artUri,
                 modifier = Modifier
