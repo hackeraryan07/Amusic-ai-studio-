@@ -28,7 +28,8 @@ fun TrackItem(
     showAlbum: Boolean,
     isFavorite: Boolean,
     onFavoriteToggle: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    centerCrop: Boolean = true
 ) {
     Row(
         modifier = modifier
@@ -44,7 +45,8 @@ fun TrackItem(
                 model = track.path,
                 modifier = Modifier
                     .size(52.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(8.dp)),
+                centerCrop = centerCrop
             )
             Spacer(modifier = Modifier.width(16.dp))
         }

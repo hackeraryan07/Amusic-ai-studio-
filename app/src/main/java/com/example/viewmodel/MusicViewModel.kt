@@ -60,6 +60,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _showAlbumName = MutableStateFlow(sharedPrefs.getBoolean("show_album_name", true))
     val showAlbumName: StateFlow<Boolean> = _showAlbumName
 
+    private val _cropAlbumArt = MutableStateFlow(sharedPrefs.getBoolean("crop_album_art", true))
+    val cropAlbumArt: StateFlow<Boolean> = _cropAlbumArt
+
     // Loading status
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning
@@ -121,6 +124,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             "show_artist" -> _showArtist.value = value
             "show_duration" -> _showDuration.value = value
             "show_album_name" -> _showAlbumName.value = value
+            "crop_album_art" -> _cropAlbumArt.value = value
         }
     }
 
@@ -129,6 +133,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _showArtist.value = sharedPrefs.getBoolean("show_artist", true)
         _showDuration.value = sharedPrefs.getBoolean("show_duration", true)
         _showAlbumName.value = sharedPrefs.getBoolean("show_album_name", true)
+        _cropAlbumArt.value = sharedPrefs.getBoolean("crop_album_art", true)
     }
 
     fun scanForLocalAudio() {

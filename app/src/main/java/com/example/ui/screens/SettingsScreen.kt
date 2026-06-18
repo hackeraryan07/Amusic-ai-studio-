@@ -27,6 +27,7 @@ fun SettingsScreen(
     val showArtist by viewModel.showArtist.collectAsState()
     val showDuration by viewModel.showDuration.collectAsState()
     val showAlbumNameSelection by viewModel.showAlbumName.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     val hasPermission by viewModel.hasPermission.collectAsState()
 
@@ -98,6 +99,16 @@ fun SettingsScreen(
                     checked = showAlbumNameSelection,
                     onCheckedChange = { viewModel.setMetadataSetting("show_album_name", it) },
                     tag = "setting_toggle_album"
+                )
+
+                // Toggle 5: Center Crop Album Art
+                SettingToggleRow(
+                    title = "Center Crop Album Art",
+                    subtitle = "Format artwork into styled squares with rounded corners, or scale to fit",
+                    icon = Icons.Default.Crop,
+                    checked = cropAlbumArt,
+                    onCheckedChange = { viewModel.setMetadataSetting("crop_album_art", it) },
+                    tag = "setting_toggle_crop"
                 )
             }
         }

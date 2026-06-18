@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,7 @@ import com.example.ui.components.TrackItem
 import com.example.viewmodel.MusicViewModel
 import com.example.viewmodel.SortType
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SongsScreen(
     viewModel: MusicViewModel,
@@ -42,6 +44,8 @@ fun SongsScreen(
     val showArtist by viewModel.showArtist.collectAsState()
     val showDuration by viewModel.showDuration.collectAsState()
     val showAlbumNameByViewModel by viewModel.showAlbumName.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
 
     // 1. Live Filter and Sort Calculations
     val filteredTracks = remember(tracks, searchQuery, sortType) {
@@ -59,36 +63,44 @@ fun SongsScreen(
         }
     }
 
-    if (filteredTracks.isEmpty()) {
-        EmptyStateView(
-            icon = Icons.Default.MusicNote,
-            text = "No songs found matches. Try scanning or reset database in Settings!"
-        )
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp)
-        ) {
-            items(filteredTracks, key = { it.id }) { track ->
-                TrackItem(
-                    track = track,
-                    onClick = { onTrackSelect(track, filteredTracks) },
-                    showAlbumArt = showAlbumArt,
-                    showArtist = showArtist,
-                    showDuration = showDuration,
-                    showAlbum = showAlbumNameByViewModel,
-                    isFavorite = track.isFavorite,
-                    onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
-                )
+    PullToRefreshBox(
+        isRefreshing = isScanning,
+        onRefresh = { viewModel.scanForLocalAudio() },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (filteredTracks.isEmpty()) {
+            EmptyStateView(
+                icon = Icons.Default.MusicNote,
+                text = "No songs found matches. Try scanning or reset database in Settings!"
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 90.dp)
+            ) {
+                items(filteredTracks, key = { it.id }) { track ->
+                    TrackItem(
+                        track = track,
+                        onClick = { onTrackSelect(track, filteredTracks) },
+                        showAlbumArt = showAlbumArt,
+                        showArtist = showArtist,
+                        showDuration = showDuration,
+                        showAlbum = showAlbumNameByViewModel,
+                        isFavorite = track.isFavorite,
+                        onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) },
+                        centerCrop = cropAlbumArt
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                    )
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistsScreen(
     viewModel: MusicViewModel,
@@ -96,6 +108,9 @@ fun ArtistsScreen(
     searchQuery: String,
     onTrackSelect: (TrackEntity, List<TrackEntity>) -> Unit
 ) {
+    val isScanning by viewModel.isScanning.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
+
     // Group tracks by artist name
     val artistGroups = remember(tracks, searchQuery) {
         tracks.filter {
@@ -106,103 +121,108 @@ fun ArtistsScreen(
 
     var selectedArtist by remember { mutableStateOf<String?>(null) }
 
-    if (artistGroups.isEmpty()) {
-        EmptyStateView(icon = Icons.Default.Person, text = "No Artists found")
-        return
-    }
-
-    if (selectedArtist != null) {
-        // Render songs list for selected artist
-        val artistSongs = artistGroups[selectedArtist] ?: emptyList()
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { selectedArtist = null }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Back to Artists (${selectedArtist})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 90.dp)
-            ) {
-                items(artistSongs) { track ->
-                    TrackItem(
-                        track = track,
-                        onClick = { onTrackSelect(track, artistSongs) },
-                        showAlbumArt = true,
-                        showArtist = false,
-                        showDuration = true,
-                        showAlbum = true,
-                        isFavorite = track.isFavorite,
-                        onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) }
-                    )
-                }
-            }
-        }
-    } else {
-        // List artists in cards
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
-        ) {
-            items(artistGroups.keys.toList()) { artist ->
-                val songs = artistGroups[artist] ?: emptyList()
-                val songsCount = songs.size
-                val firstTrackPath = songs.firstOrNull()?.path
-                
-                Card(
+    PullToRefreshBox(
+        isRefreshing = isScanning,
+        onRefresh = { viewModel.scanForLocalAudio() },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (artistGroups.isEmpty()) {
+            EmptyStateView(icon = Icons.Default.Person, text = "No Artists found")
+        } else if (selectedArtist != null) {
+            // Render songs list for selected artist
+            val artistSongs = artistGroups[selectedArtist] ?: emptyList()
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .clickable { selectedArtist = artist },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                        .clickable { selectedArtist = null }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TrackArt(
-                            model = firstTrackPath,
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape),
-                            placeholderIcon = Icons.Default.Person
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Back to Artists (${selectedArtist})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 90.dp)
+                ) {
+                    items(artistSongs) { track ->
+                        TrackItem(
+                            track = track,
+                            onClick = { onTrackSelect(track, artistSongs) },
+                            showAlbumArt = true,
+                            showArtist = false,
+                            showDuration = true,
+                            showAlbum = true,
+                            isFavorite = track.isFavorite,
+                            onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) },
+                            centerCrop = cropAlbumArt
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = artist,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                    }
+                }
+            }
+        } else {
+            // List artists in cards
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
+            ) {
+                items(artistGroups.keys.toList()) { artist ->
+                    val songs = artistGroups[artist] ?: emptyList()
+                    val songsCount = songs.size
+                    val firstTrackPath = songs.firstOrNull()?.path
+                    
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .clickable { selectedArtist = artist },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TrackArt(
+                                model = firstTrackPath,
+                                modifier = Modifier
+                                    .size(50.dp)
+                                    .clip(CircleShape),
+                                placeholderIcon = Icons.Default.Person,
+                                centerCrop = cropAlbumArt
                             )
-                            Text(
-                                text = "$songsCount songs cataloged",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = artist,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "$songsCount songs cataloged",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "Open artist songs",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Open artist songs",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
@@ -210,6 +230,7 @@ fun ArtistsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumsScreen(
     viewModel: MusicViewModel,
@@ -217,6 +238,9 @@ fun AlbumsScreen(
     searchQuery: String,
     onTrackSelect: (TrackEntity, List<TrackEntity>) -> Unit
 ) {
+    val isScanning by viewModel.isScanning.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
+
     // Group listed tracks by Album name
     val albumGroups = remember(tracks, searchQuery) {
         tracks.filter {
@@ -227,105 +251,108 @@ fun AlbumsScreen(
 
     var selectedAlbum by remember { mutableStateOf<String?>(null) }
 
-    if (albumGroups.isEmpty()) {
-        EmptyStateView(icon = Icons.Default.Album, text = "No Albums found")
-        return
-    }
-
-    if (selectedAlbum != null) {
-        // Render content for selected album
-        val albumSongs = albumGroups[selectedAlbum] ?: emptyList()
-        val representativeTrack = albumSongs.firstOrNull()
-        
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { selectedAlbum = null }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Back to Albums (${selectedAlbum})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 90.dp)
-            ) {
-                items(albumSongs) { track ->
-                    TrackItem(
-                        track = track,
-                        onClick = { onTrackSelect(track, albumSongs) },
-                        showAlbumArt = false, // already on album details, hide small art if preferred
-                        showArtist = true,
-                        showDuration = true,
-                        showAlbum = false,
-                        isFavorite = track.isFavorite,
-                        onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) }
+    PullToRefreshBox(
+        isRefreshing = isScanning,
+        onRefresh = { viewModel.scanForLocalAudio() },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (albumGroups.isEmpty()) {
+            EmptyStateView(icon = Icons.Default.Album, text = "No Albums found")
+        } else if (selectedAlbum != null) {
+            // Render content for selected album
+            val albumSongs = albumGroups[selectedAlbum] ?: emptyList()
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedAlbum = null }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Back to Albums (${selectedAlbum})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-            }
-        }
-    } else {
-        // List albums in a nice 2x2 grid
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 90.dp, top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(albumGroups.keys.toList()) { album ->
-                val songs = albumGroups[album] ?: emptyList()
-                val artist = songs.firstOrNull()?.artist ?: "Unknown Artist"
-                val firstTrackPath = songs.firstOrNull()?.path
-
-                Card(
-                    onClick = { selectedAlbum = album },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 90.dp)
                 ) {
-                    Column {
-                        TrackArt(
-                            model = firstTrackPath,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                            placeholderIcon = Icons.Default.Album
+                    items(albumSongs) { track ->
+                        TrackItem(
+                            track = track,
+                            onClick = { onTrackSelect(track, albumSongs) },
+                            showAlbumArt = false, // already on album details, hide small art if preferred
+                            showArtist = true,
+                            showDuration = true,
+                            showAlbum = false,
+                            isFavorite = track.isFavorite,
+                            onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) },
+                            centerCrop = cropAlbumArt
                         )
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = album,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                    }
+                }
+            }
+        } else {
+            // List albums in a nice 2x2 grid
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 90.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(albumGroups.keys.toList()) { album ->
+                    val songs = albumGroups[album] ?: emptyList()
+                    val artist = songs.firstOrNull()?.artist ?: "Unknown Artist"
+                    val firstTrackPath = songs.firstOrNull()?.path
+
+                    Card(
+                        onClick = { selectedAlbum = album },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column {
+                            TrackArt(
+                                model = firstTrackPath,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                                placeholderIcon = Icons.Default.Album,
+                                centerCrop = cropAlbumArt
                             )
-                            Text(
-                                text = artist,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${songs.size} Audio tracks",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = album,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = artist,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "${songs.size} Audio tracks",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
@@ -334,6 +361,7 @@ fun AlbumsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FoldersScreen(
     viewModel: MusicViewModel,
@@ -341,6 +369,9 @@ fun FoldersScreen(
     searchQuery: String,
     onTrackSelect: (TrackEntity, List<TrackEntity>) -> Unit
 ) {
+    val isScanning by viewModel.isScanning.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
+
     // Group listed tracks by DirectoryFolderName
     val folderGroups = remember(tracks, searchQuery) {
         tracks.filter {
@@ -351,104 +382,108 @@ fun FoldersScreen(
 
     var selectedFolder by remember { mutableStateOf<String?>(null) }
 
-    if (folderGroups.isEmpty()) {
-        EmptyStateView(icon = Icons.Default.Folder, text = "No folder structures available")
-        return
-    }
-
-    if (selectedFolder != null) {
-        val folderSongs = folderGroups[selectedFolder] ?: emptyList()
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { selectedFolder = null }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Back to Folders (${selectedFolder})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 90.dp)
-            ) {
-                items(folderSongs) { track ->
-                    TrackItem(
-                        track = track,
-                        onClick = { onTrackSelect(track, folderSongs) },
-                        showAlbumArt = true,
-                        showArtist = true,
-                        showDuration = true,
-                        showAlbum = true,
-                        isFavorite = track.isFavorite,
-                        onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) }
-                    )
-                }
-            }
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
-        ) {
-            items(folderGroups.keys.toList()) { folder ->
-                val songsCount = folderGroups[folder]?.size ?: 0
-                Card(
+    PullToRefreshBox(
+        isRefreshing = isScanning,
+        onRefresh = { viewModel.scanForLocalAudio() },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (folderGroups.isEmpty()) {
+            EmptyStateView(icon = Icons.Default.Folder, text = "No folder structures available")
+        } else if (selectedFolder != null) {
+            val folderSongs = folderGroups[selectedFolder] ?: emptyList()
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .clickable { selectedFolder = folder },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                        .clickable { selectedFolder = null }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.secondaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Folder,
-                                contentDescription = "Folder Icon",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = folder,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "$songsCount audio files inside",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Open folder",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Back to Folders (${selectedFolder})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 90.dp)
+                ) {
+                    items(folderSongs) { track ->
+                        TrackItem(
+                            track = track,
+                            onClick = { onTrackSelect(track, folderSongs) },
+                            showAlbumArt = true,
+                            showArtist = true,
+                            showDuration = true,
+                            showAlbum = true,
+                            isFavorite = track.isFavorite,
+                            onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) },
+                            centerCrop = cropAlbumArt
                         )
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
+            ) {
+                items(folderGroups.keys.toList()) { folder ->
+                    val songsCount = folderGroups[folder]?.size ?: 0
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .clickable { selectedFolder = folder },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = "Folder Icon",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = folder,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "$songsCount audio files inside",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "Open folder",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -456,12 +491,16 @@ fun FoldersScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistsScreen(
     viewModel: MusicViewModel,
     tracks: List<TrackEntity>,
     onTrackSelect: (TrackEntity, List<TrackEntity>) -> Unit
 ) {
+    val isScanning by viewModel.isScanning.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
+
     // 1. Favorites list (filter based on Room's isFavorite column)
     val favoriteTracks = remember(tracks) {
         tracks.filter { it.isFavorite }
@@ -469,77 +508,84 @@ fun PlaylistsScreen(
 
     var selectedPlaylistName by remember { mutableStateOf<String?>(null) }
 
-    if (selectedPlaylistName != null) {
-        val playlistSongs = if (selectedPlaylistName == "Favorites") {
-            favoriteTracks
-        } else {
-            // standard playlist fallback
-            tracks
-        }
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { selectedPlaylistName = null }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Back to Playlists (${selectedPlaylistName})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            if (playlistSongs.isEmpty()) {
-                EmptyStateView(
-                    icon = Icons.Default.Favorite,
-                    text = "This playlist is empty. Mark songs as favorite to populate!"
-                )
+    PullToRefreshBox(
+        isRefreshing = isScanning,
+        onRefresh = { viewModel.scanForLocalAudio() },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (selectedPlaylistName != null) {
+            val playlistSongs = if (selectedPlaylistName == "Favorites") {
+                favoriteTracks
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 90.dp)
+                // standard playlist fallback
+                tracks
+            }
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedPlaylistName = null }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(playlistSongs) { track ->
-                        TrackItem(
-                            track = track,
-                            onClick = { onTrackSelect(track, playlistSongs) },
-                            showAlbumArt = true,
-                            showArtist = true,
-                            showDuration = true,
-                            showAlbum = true,
-                            isFavorite = track.isFavorite,
-                            onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) }
-                        )
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Back to Playlists (${selectedPlaylistName})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                if (playlistSongs.isEmpty()) {
+                    EmptyStateView(
+                        icon = Icons.Default.Favorite,
+                        text = "This playlist is empty. Mark songs as favorite to populate!"
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 90.dp)
+                    ) {
+                        items(playlistSongs) { track ->
+                            TrackItem(
+                                track = track,
+                                onClick = { onTrackSelect(track, playlistSongs) },
+                                showAlbumArt = true,
+                                showArtist = true,
+                                showDuration = true,
+                                showAlbum = true,
+                                isFavorite = track.isFavorite,
+                                onFavoriteToggle = { fav -> viewModel.toggleFavorite(track.id, fav) },
+                                centerCrop = cropAlbumArt
+                            )
+                        }
                     }
                 }
             }
-        }
-    } else {
-        // List active playlist categories
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
-        ) {
-            // Favorites Category
-            item {
-                PlaylistCategoryRow(
-                    title = "Favorites",
-                    description = "${favoriteTracks.size} Loved tracks synced",
-                    icon = Icons.Default.Favorite,
-                    iconColor = Color(0xFFE91E63),
-                    onClick = { selectedPlaylistName = "Favorites" }
-                )
+        } else {
+            // List active playlist categories
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
+            ) {
+                // Favorites Category
+                item {
+                    PlaylistCategoryRow(
+                        title = "Favorites",
+                        description = "${favoriteTracks.size} Loved tracks synced",
+                        icon = Icons.Default.Favorite,
+                        iconColor = Color(0xFFE91E63),
+                        onClick = { selectedPlaylistName = "Favorites" }
+                    )
+                }
             }
         }
     }

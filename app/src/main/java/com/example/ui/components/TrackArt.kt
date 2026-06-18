@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import com.bumptech.glide.integration.compose.ExperimentalGlideComposeApi
 import com.bumptech.glide.integration.compose.GlideImage
 import com.bumptech.glide.integration.compose.placeholder
@@ -25,21 +26,38 @@ fun TrackArt(
     model: Any?,
     modifier: Modifier = Modifier,
     placeholderIcon: ImageVector = Icons.Default.MusicNote,
-    placeholderColor: Color = MaterialTheme.colorScheme.primaryContainer
+    placeholderColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    centerCrop: Boolean = true
 ) {
-    var artBytes by remember(model) { mutableStateOf<ByteArray?>(null) }
-    var isLoadingBytes by remember(model) { mutableStateOf(false) }
+    val cached = remember(model) {
+        if (model is String && !model.startsWith("http") && !model.startsWith("content")) {
+            AlbumArtHelper.getCachedByteArray(model)
+        } else {
+            null
+        }
+    }
+
+    var artBytes by remember(model) { mutableStateOf<ByteArray?>(cached) }
+    var isLoadingBytes by remember(model) { 
+        mutableStateOf(cached == null && model is String && !model.startsWith("http") && !model.startsWith("content")) 
+    }
 
     LaunchedEffect(model) {
         if (model is String && !model.startsWith("http") && !model.startsWith("content")) {
-            isLoadingBytes = true
-            val bytes = withContext(Dispatchers.IO) {
-                AlbumArtHelper.getByteArray(model)
+            if (cached == null) {
+                isLoadingBytes = true
+                val bytes = withContext(Dispatchers.IO) {
+                    AlbumArtHelper.getByteArray(model)
+                }
+                artBytes = bytes
+                isLoadingBytes = false
+            } else {
+                artBytes = cached
+                isLoadingBytes = false
             }
-            artBytes = bytes
-            isLoadingBytes = false
         } else {
             artBytes = null
+            isLoadingBytes = false
         }
     }
 
@@ -48,6 +66,8 @@ fun TrackArt(
     } else {
         model
     }
+
+    val contentScale = if (centerCrop) ContentScale.Crop else ContentScale.Fit
 
     Box(
         modifier = modifier
@@ -65,6 +85,7 @@ fun TrackArt(
                 model = finalModel,
                 contentDescription = "Album Art",
                 modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale,
                 loading = placeholder {
                     Box(
                         modifier = Modifier.fillMaxSize()

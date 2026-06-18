@@ -32,6 +32,7 @@ fun MusicPlayerOverlay(
     val isPlaying by viewModel.audioPlayer.isPlaying.collectAsState()
     val position by viewModel.audioPlayer.currentPosition.collectAsState()
     val duration by viewModel.audioPlayer.duration.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
 
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -62,7 +63,8 @@ fun MusicPlayerOverlay(
                             model = activeTrack.path,
                             modifier = Modifier
                                 .size(44.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(8.dp)),
+                            centerCrop = cropAlbumArt
                         )
 
                         Spacer(modifier = Modifier.width(12.dp))
@@ -178,7 +180,8 @@ fun MusicPlayerOverlay(
                 ) {
                     TrackArt(
                         model = activeTrack.path,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        centerCrop = cropAlbumArt
                     )
                 }
 
