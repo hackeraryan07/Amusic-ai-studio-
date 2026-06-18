@@ -5,6 +5,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +42,9 @@ fun MusicPlayerOverlay(
     // If no song is loaded, hide the controller
     val activeTrack = currentTrack ?: return
 
+    val density = LocalDensity.current
+    val swipeThresholdPx = remember { with(density) { 56.dp.toPx() } }
+
     Box(modifier = modifier) {
         if (!isExpanded) {
             // A. COLLAPSED MINI PLAYER BAR
@@ -46,7 +52,44 @@ fun MusicPlayerOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp)
-                    .clickable { isExpanded = true }
+                    .pointerInput(Unit) {
+                        var dragAmountX = 0f
+                        var dragAmountY = 0f
+                        var swipedTriggered = false
+                        detectDragGestures(
+                            onDragStart = {
+                                dragAmountX = 0f
+                                dragAmountY = 0f
+                                swipedTriggered = false
+                            },
+                            onDragEnd = {
+                                if (!swipedTriggered && kotlin.math.abs(dragAmountX) < 15f && kotlin.math.abs(dragAmountY) < 15f) {
+                                    isExpanded = true
+                                }
+                            },
+                            onDragCancel = {
+                                swipedTriggered = false
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragAmountX += dragAmount.x
+                                dragAmountY += dragAmount.y
+                                
+                                if (!swipedTriggered) {
+                                    if (dragAmountX > swipeThresholdPx) {
+                                        swipedTriggered = true
+                                        viewModel.playPrevious()
+                                    } else if (dragAmountX < -swipeThresholdPx) {
+                                        swipedTriggered = true
+                                        viewModel.playNext()
+                                    } else if (dragAmountY > swipeThresholdPx) {
+                                        swipedTriggered = true
+                                        viewModel.stopPlaybackService()
+                                    }
+                                }
+                            }
+                        )
+                    }
                     .testTag("mini_player_bar"),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
@@ -170,13 +213,42 @@ fun MusicPlayerOverlay(
                     }
                 }
 
-                // Album Cover Cover art card (Large box)
+                // Album Cover Cover art card (Large box) with horizontal swipe gesture
                 Card(
                     shape = RoundedCornerShape(24.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
                     modifier = Modifier
                         .size(280.dp)
                         .aspectRatio(1f)
+                        .pointerInput(Unit) {
+                            var dragAmountX = 0f
+                            var swipedTriggered = false
+                            detectDragGestures(
+                                onDragStart = {
+                                    dragAmountX = 0f
+                                    swipedTriggered = false
+                                },
+                                onDragEnd = {
+                                    swipedTriggered = false
+                                },
+                                onDragCancel = {
+                                    swipedTriggered = false
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragAmountX += dragAmount.x
+                                    if (!swipedTriggered) {
+                                        if (dragAmountX > swipeThresholdPx) {
+                                            swipedTriggered = true
+                                            viewModel.playPrevious()
+                                        } else if (dragAmountX < -swipeThresholdPx) {
+                                            swipedTriggered = true
+                                            viewModel.playNext()
+                                        }
+                                    }
+                                }
+                            )
+                        }
                 ) {
                     TrackArt(
                         model = activeTrack.path,

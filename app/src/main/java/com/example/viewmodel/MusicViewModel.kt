@@ -3,6 +3,7 @@ package com.example.viewmodel
 import android.Manifest
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.MediaStore
@@ -14,6 +15,7 @@ import com.example.data.database.AppDatabase
 import com.example.data.database.TrackEntity
 import com.example.data.repository.TrackRepository
 import com.example.playback.AudioPlayer
+import com.example.playback.PlaybackService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -258,6 +260,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 scanForLocalAudio()
             }
         }
+    }
+
+    fun stopPlaybackService() {
+        val intent = Intent(context, PlaybackService::class.java).apply {
+            action = PlaybackService.ACTION_STOP
+        }
+        context.startService(intent)
     }
 
     override fun onCleared() {

@@ -268,6 +268,7 @@ class PlaybackService : Service() {
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setShowWhen(false)
+                .setDeleteIntent(pStop)
 
             if (bitmap != null) {
                 notificationBuilder.setLargeIcon(bitmap)
@@ -310,14 +311,25 @@ class PlaybackService : Service() {
 
             val notification = notificationBuilder.build()
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                )
+            if (!isPlaying) {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    stopForeground(2) // Service.STOP_FOREGROUND_DETACH
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(false)
+                }
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(NOTIFICATION_ID, notification)
             } else {
-                startForeground(NOTIFICATION_ID, notification)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
             }
         }
     }
