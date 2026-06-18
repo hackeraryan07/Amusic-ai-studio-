@@ -58,10 +58,8 @@ fun MusicPlayerOverlay(
                             .fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val artUri = java.io.File(activeTrack.path)
-                        
                         TrackArt(
-                            model = artUri,
+                            model = activeTrack.path,
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(8.dp))
@@ -130,8 +128,6 @@ fun MusicPlayerOverlay(
 
     // B. EXPANDED NOW PLAYING SHEET DIALOG
     if (isExpanded) {
-        val artUri = java.io.File(activeTrack.path)
-
         ModalBottomSheet(
             onDismissRequest = { isExpanded = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -181,7 +177,7 @@ fun MusicPlayerOverlay(
                         .aspectRatio(1f)
                 ) {
                     TrackArt(
-                        model = artUri,
+                        model = activeTrack.path,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

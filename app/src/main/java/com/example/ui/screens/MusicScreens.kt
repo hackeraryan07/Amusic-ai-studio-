@@ -161,11 +161,9 @@ fun ArtistsScreen(
             contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
         ) {
             items(artistGroups.keys.toList()) { artist ->
-                val songsCount = artistGroups[artist]?.size ?: 0
-                val artistArt = when (artist) {
-                    "SoundHelix" -> "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150"
-                    else -> "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=150"
-                }
+                val songs = artistGroups[artist] ?: emptyList()
+                val songsCount = songs.size
+                val firstTrackPath = songs.firstOrNull()?.path
                 
                 Card(
                     modifier = Modifier
@@ -179,10 +177,11 @@ fun ArtistsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TrackArt(
-                            model = artistArt,
+                            model = firstTrackPath,
                             modifier = Modifier
                                 .size(50.dp)
-                                .clip(CircleShape)
+                                .clip(CircleShape),
+                            placeholderIcon = Icons.Default.Person
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -290,14 +289,7 @@ fun AlbumsScreen(
             items(albumGroups.keys.toList()) { album ->
                 val songs = albumGroups[album] ?: emptyList()
                 val artist = songs.firstOrNull()?.artist ?: "Unknown Artist"
-                
-                // Get preloaded mock album covers for demo visual splendor, or construct custom
-                val albumArt = when (album) {
-                    "Helix Odyssey" -> "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300"
-                    "Ambience World" -> "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300"
-                    "Synthwave Beats" -> "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=300"
-                    else -> "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=300"
-                }
+                val firstTrackPath = songs.firstOrNull()?.path
 
                 Card(
                     onClick = { selectedAlbum = album },
@@ -305,11 +297,12 @@ fun AlbumsScreen(
                 ) {
                     Column {
                         TrackArt(
-                            model = albumArt,
+                            model = firstTrackPath,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
-                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                            placeholderIcon = Icons.Default.Album
                         )
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
@@ -538,7 +531,7 @@ fun PlaylistsScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp)
         ) {
-            // A. Favorites Category
+            // Favorites Category
             item {
                 PlaylistCategoryRow(
                     title = "Favorites",
@@ -546,17 +539,6 @@ fun PlaylistsScreen(
                     icon = Icons.Default.Favorite,
                     iconColor = Color(0xFFE91E63),
                     onClick = { selectedPlaylistName = "Favorites" }
-                )
-            }
-            // B. Demo streams playlist
-            item {
-                val demoTracksCount = tracks.count { it.isDemo }
-                PlaylistCategoryRow(
-                    title = "Online Demo Streams",
-                    description = "$demoTracksCount public audio streams",
-                    icon = Icons.Default.LibraryMusic,
-                    iconColor = MaterialTheme.colorScheme.primary,
-                    onClick = { selectedPlaylistName = "Online Demo Streams" }
                 )
             }
         }

@@ -183,26 +183,18 @@ class PlaybackService : Service() {
         }
 
         serviceScope.launch {
-            val artUri = if (track.isDemo) {
-                when (track.id) {
-                    "demo_1" -> "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300"
-                    "demo_2" -> "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300"
-                    "demo_3" -> "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300"
-                    "demo_4" -> "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=300"
-                    "demo_5" -> "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=300"
-                    else -> File(track.path)
-                }
-            } else {
-                File(track.path)
-            }
-
             val bitmap: Bitmap? = withContext(Dispatchers.IO) {
                 try {
-                    Glide.with(this@PlaybackService)
-                        .asBitmap()
-                        .load(artUri)
-                        .submit(300, 300)
-                        .get()
+                    val artBytes = AlbumArtHelper.getByteArray(track.path)
+                    if (artBytes != null) {
+                        Glide.with(this@PlaybackService)
+                            .asBitmap()
+                            .load(artBytes)
+                            .submit(300, 300)
+                            .get()
+                    } else {
+                        null
+                    }
                 } catch (e: Exception) {
                     null
                 }

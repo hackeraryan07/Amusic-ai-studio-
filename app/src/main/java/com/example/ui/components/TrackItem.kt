@@ -40,9 +40,8 @@ fun TrackItem(
     ) {
         // 1. Conditional Album Art Render
         if (showAlbumArt) {
-            val artUri = java.io.File(track.path)
             TrackArt(
-                model = artUri,
+                model = track.path,
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(8.dp))
