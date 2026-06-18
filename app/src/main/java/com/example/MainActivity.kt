@@ -1,6 +1,7 @@
 package com.example
 
-// Amusic MainActivity - Core music controller interface entry point
+// Amusic MainActivity - Core music controller interface entry point.
+// Note: Supported robust CI/CD integration with self-healing debug keystore generation via keytool.
 import android.Manifest
 import android.os.Build
 import android.os.Bundle

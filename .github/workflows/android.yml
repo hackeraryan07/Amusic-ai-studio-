@@ -25,14 +25,20 @@ jobs:
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v3
 
-    - name: Decode Debug Keystore
-      # Decodes the base64-encoded debug.keystore file so that gradle assembleDebug can sign the APK during CI/CD.
+    - name: Prepare Debug Keystore
+      # Prepares the signing keystore: decodes base64-encoded file if present, otherwise generates a fresh debug keystore via keytool.
       run: |
         if [ -f debug.keystore.base64 ]; then
+          echo "Decoding debug.keystore.base64..."
           base64 -d debug.keystore.base64 > debug.keystore
+        elif [ ! -f debug.keystore ]; then
+          echo "debug.keystore.base64 not found. Dynamically generating debug.keystore via keytool..."
+          keytool -genkey -v -keystore debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
         else
-          echo "debug.keystore.base64 not found in repository root!"
-          exit 1
+          echo "debug.keystore already exists."
         fi
 
     - name: Build Debug APK with Gradle
