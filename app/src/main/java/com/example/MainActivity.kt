@@ -1,5 +1,6 @@
 package com.example
 
+// Amusic MainActivity - Core music controller interface entry point
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
